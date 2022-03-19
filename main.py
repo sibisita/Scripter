@@ -41,31 +41,41 @@ def netmiko_logic(devices, commands):
     logs_entry(net_connect.find_prompt())
     logs_entry("**** Connection to Jump Server Successful ****\n\n")
     for device in devices:
-        logs_entry(
-            f"**** Establishing connection to {device} ****")
-        net_connect.write_channel(
-            f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device.lower()}\n')
-        time.sleep(5)
-        output = net_connect.read_channel()
-        if "Password" in output:
-            logs_entry("Received password prompt")
-            net_connect.write_channel(f'{devicepassword.get()}\n')
-            time.sleep(2)
-            logs_entry(net_connect.find_prompt())
+        try:
             logs_entry(
-                f"**** Connection to {device} Successful ****")
-        redispatch(net_connect, device_type="cisco_ios")
-        with open(save_location1+f"/{device}_{datetime.now().strftime('%Y%m-%d%H-%M%S')}.log", "w+") as f1:
-            for cmd in commands:
-                f1.write(f"******** Executing {cmd} ********\n\n")
+                f"**** Establishing connection to {device} ****")
+            net_connect.write_channel(
+                f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device.lower()}\n')
+            delay_with_refresh(5)
+            output = net_connect.read_channel()
+            if "Password" in output:
+                logs_entry("Received password prompt")
+                net_connect.write_channel(f'{devicepassword.get()}\n')
+                delay_with_refresh(2)
+                logs_entry(net_connect.find_prompt())
                 logs_entry(
-                    f"In {device}, Executing {cmd}")
-                command_output = net_connect.send_command(cmd)
-                f1.write(command_output+"\n\n****************\n\n")
-        logs_entry(net_connect.find_prompt())
-        net_connect.write_channel("exit\n\n")
-        time.sleep(2)
-        logs_entry(net_connect.find_prompt())
+                    f"**** Connection to {device} Successful ****")
+            redispatch(net_connect, device_type="cisco_ios")
+            if (net_connect.find_prompt()[-1] != "#"):
+                logs_entry(net_connect.find_prompt())
+                net_connect.write_channel("enable\n")
+                delay_with_refresh(1)
+                net_connect.write_channel(f"{enablepassword.get()}\n")
+                delay_with_refresh(1)
+                logs_entry(net_connect.find_prompt())
+            with open(save_location1+f"/{device}_{datetime.now().strftime('%Y%m-%d%H-%M%S')}.log", "w+") as f1:
+                for cmd in commands:
+                    f1.write(f"******** Output : {cmd} ********\n\n")
+                    logs_entry(
+                        f"In {device}, Executing {cmd}")
+                    command_output = net_connect.send_command(cmd)
+                    f1.write(command_output+"\n\n****************\n\n")
+            logs_entry(net_connect.find_prompt())
+            net_connect.write_channel("exit\n\n")
+            delay_with_refresh(1)
+            logs_entry(net_connect.find_prompt())
+        except Exception as e:
+            logs_entry(f"\n\nError in {device} \n {e}\n\n\n")
 
 
 def main_logic():
@@ -102,6 +112,14 @@ def main_logic():
         messagebox.showerror("Check Password", "Jump Server password error")
     FILEBROWSER_PATH = os.path.join(os.getenv('WINDIR'), 'explorer.exe')
     subprocess.run([FILEBROWSER_PATH, os.path.normpath(save_location1)])
+
+
+def delay_with_refresh(n):
+    i = 0
+    while(i < n):
+        i += 0.1
+        time.sleep(.1)
+        root.update_idletasks()
 
 
 def logs_entry(log, end="\n"):

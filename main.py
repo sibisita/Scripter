@@ -40,14 +40,12 @@ def netmiko_logic(devices, commands):
 
     logs_entry(net_connect.find_prompt())
     logs_entry("**** Connection to Jump Server Successful ****\n\n")
-
-    logs_entry(output)
     for device in devices:
         logs_entry(
             f"**** Establishing connection to {device} ****")
         net_connect.write_channel(
             f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device.lower()}\n')
-        time.sleep(10)
+        time.sleep(5)
         output = net_connect.read_channel()
         if "Password" in output:
             logs_entry("Received password prompt")
@@ -65,7 +63,8 @@ def netmiko_logic(devices, commands):
                 command_output = net_connect.send_command(cmd)
                 f1.write(command_output+"\n\n****************\n\n")
         logs_entry(net_connect.find_prompt())
-        net_connect.send_command("exit")
+        net_connect.write_channel("exit\n\n")
+        time.sleep(2)
         logs_entry(net_connect.find_prompt())
 
 

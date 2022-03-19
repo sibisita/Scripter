@@ -9,14 +9,14 @@ import time
 from datetime import datetime
 from tkinter import messagebox
 import subprocess
-from netmiko import Netmiko
+from netmiko import Netmiko, redispatch, ssh_exception
 
 root = Tk()
 
 about_this_application = '''
 Hi,
 This application is created for taking backup of cisco devices after logging into a jumpserver.
-Source code for this is available in : https://github.com/sibisita/Multi-Search/blob/main/multi_search.py .
+Source code for this is available in : https://github.com/sibisita/Scripter.git .
 Instructions:
 Step 1: Enter the cisco device list or IP. Make sure the hostnames entered is correct.
 Step 2: Enter the commands that you want to execute on each host.
@@ -46,15 +46,27 @@ def netmiko_logic(devices, commands):
         logs_entry(
             f"**** Establishing connection to {device} ****")
         net_connect.write_channel(
-            f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device}\n')
+            f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device.lower()}\n')
         time.sleep(10)
         output = net_connect.read_channel()
-        logs_entry(output)
         if "Password" in output:
             logs_entry("Received password prompt")
             net_connect.write_channel(f'{devicepassword.get()}\n')
+            time.sleep(2)
+            logs_entry(net_connect.find_prompt())
             logs_entry(
                 f"**** Connection to {device} Successful ****")
+        redispatch(net_connect, device_type="cisco_ios")
+        with open(save_location1+f"/{device}_{datetime.now().strftime('%Y%m-%d%H-%M%S')}.log", "w+") as f1:
+            for cmd in commands:
+                f1.write(f"******** Executing {cmd} ********\n\n")
+                logs_entry(
+                    f"In {device}, Executing {cmd}")
+                command_output = net_connect.send_command(cmd)
+                f1.write(command_output+"\n\n****************\n\n")
+        logs_entry(net_connect.find_prompt())
+        net_connect.send_command("exit")
+        logs_entry(net_connect.find_prompt())
 
 
 def main_logic():
@@ -80,7 +92,15 @@ def main_logic():
         messagebox.showinfo("Command list Empty!!",
                             'Enter commands to execute!!')
         return
-    netmiko_logic(device_list_set, command_list_set)
+
+    try:
+        netmiko_logic(device_list_set, command_list_set)
+    except ssh_exception.NetmikoTimeoutException:
+        search.configure(state="normal")
+        messagebox.showerror("Jump Server not found", "Check IP or Hostname")
+    except ssh_exception.NetmikoAuthenticationException:
+        search.configure(state="normal")
+        messagebox.showerror("Check Password", "Jump Server password error")
     FILEBROWSER_PATH = os.path.join(os.getenv('WINDIR'), 'explorer.exe')
     subprocess.run([FILEBROWSER_PATH, os.path.normpath(save_location1)])
 
@@ -97,6 +117,11 @@ def new_window():
     window11 = Toplevel(root)
     window11.geometry("1000x400")
     window11.title("About This Application!")
+    try:
+        photo = PhotoImage(file=resource_path("icon.png"))
+        window11.iconphoto(False, photo)
+    except:
+        pass
     a11 = Text(window11, height=400, width=1000)
     a11.insert(INSERT, about_this_application)
     a11.grid(column=0, row=0, pady=1, padx=1, sticky="w")
@@ -108,6 +133,15 @@ def save_in_folder():
         global save_location1
         save_location1 = temp_var
         l2.configure(text=save_location1)
+
+
+def resource_path(relative_path):
+    try:
+        base_path = os.sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 # FrontEnd
@@ -197,9 +231,13 @@ jumpuserEntry.grid(row=5, column=4)
 jumppasswordLabel.grid(row=6, column=3)
 jumppasswordEntry.grid(row=6, column=4)
 
+try:
+    photo = PhotoImage(file=resource_path("icon.png"))
+    root.iconphoto(False, photo)
+except:
+    pass
 
 text_area.focus()
-logs_entry("hello")
 
 
 root.mainloop()

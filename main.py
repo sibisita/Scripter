@@ -42,38 +42,60 @@ def netmiko_logic(devices, commands):
     logs_entry("**** Connection to Jump Server Successful ****\n\n")
     for device in devices:
         try:
-            logs_entry(
-                f"**** Establishing connection to {device} ****")
-            net_connect.write_channel(
-                f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device.lower()}\n')
-            delay_with_refresh(5)
-            output = net_connect.read_channel()
-            if "Password" in output:
-                logs_entry("Received password prompt")
-                net_connect.write_channel(f'{devicepassword.get()}\n')
+            if(device != "\n" and device[0] != " "):
+                logs_entry(
+                    f"**** Establishing connection to {device} ****")
+                net_connect.write_channel(
+                    f'ssh -o "StrictHostKeyChecking no" {deviceuser.get()}@{device.lower()}\n')
+                delay_with_refresh(10)  # Wait for 10 secs to connect
+                output = net_connect.read_channel()
+                logs_entry(output)
+                if "Password" not in output:
+                    # Wait for another 10 secs to connect if no response
+                    logs_entry(output)
+                    delay_with_refresh(10)
+                    output = net_connect.read_channel()
+                if "Password" not in output:  # Wait for another 10 secs to connect if no response
+                    logs_entry(output)
+                    delay_with_refresh(10)
+                    output = net_connect.read_channel()
+                if "Password" not in output:
+                    # Wait for another 10 secs to connect if no response, If no response for 40 secs this device will throw error.
+                    logs_entry(output)
+                    delay_with_refresh(10)
+                    output = net_connect.read_channel()
+                if "Password" in output:
+                    logs_entry(output)
+                    logs_entry("Received password prompt")
+                    net_connect.write_channel(f'{devicepassword.get()}\n')
+                    delay_with_refresh(10)
+                    logs_entry(net_connect.find_prompt())
+                    if (net_connect.find_prompt()[-1] not in [">", "#"]):
+                        logs_entry(
+                            f"**** Connection to {device} not Successful ****")
+                        continue  # can be due to any error
+                    else:
+                        logs_entry(
+                            f"**** Connection to {device} Successful ****")
+                redispatch(net_connect, device_type="cisco_ios")
+                if (net_connect.find_prompt()[-1] != "#"):
+                    logs_entry(net_connect.find_prompt())
+                    net_connect.write_channel("enable\n")
+                    delay_with_refresh(3)
+                    net_connect.write_channel(f"{enablepassword.get()}\n")
+                    delay_with_refresh(10)
+                    logs_entry(net_connect.find_prompt())
+                with open(save_location1+f"/{device}_{datetime.now().strftime('%Y%m-%d%H-%M%S')}.log", "w+") as f1:
+                    for cmd in commands:
+                        f1.write(f"******** Output : {cmd} ********\n\n")
+                        logs_entry(
+                            f"In {device}, Executing {cmd}")
+                        command_output = net_connect.send_command(cmd)
+                        f1.write(command_output+"\n\n****************\n\n")
+                logs_entry(net_connect.find_prompt())
+                net_connect.write_channel("exit\n\n")
                 delay_with_refresh(2)
                 logs_entry(net_connect.find_prompt())
-                logs_entry(
-                    f"**** Connection to {device} Successful ****")
-            redispatch(net_connect, device_type="cisco_ios")
-            if (net_connect.find_prompt()[-1] != "#"):
-                logs_entry(net_connect.find_prompt())
-                net_connect.write_channel("enable\n")
-                delay_with_refresh(1)
-                net_connect.write_channel(f"{enablepassword.get()}\n")
-                delay_with_refresh(1)
-                logs_entry(net_connect.find_prompt())
-            with open(save_location1+f"/{device}_{datetime.now().strftime('%Y%m-%d%H-%M%S')}.log", "w+") as f1:
-                for cmd in commands:
-                    f1.write(f"******** Output : {cmd} ********\n\n")
-                    logs_entry(
-                        f"In {device}, Executing {cmd}")
-                    command_output = net_connect.send_command(cmd)
-                    f1.write(command_output+"\n\n****************\n\n")
-            logs_entry(net_connect.find_prompt())
-            net_connect.write_channel("exit\n\n")
-            delay_with_refresh(1)
-            logs_entry(net_connect.find_prompt())
         except Exception as e:
             logs_entry(f"\n\nError in {device} \n {e}\n\n\n")
 
@@ -103,13 +125,16 @@ def main_logic():
         return
 
     try:
-        netmiko_logic(device_list_set, command_list_set)
+        netmiko_logic(device_list, command_list)
     except ssh_exception.NetmikoTimeoutException:
         search.configure(state="normal")
         messagebox.showerror("Jump Server not found", "Check IP or Hostname")
     except ssh_exception.NetmikoAuthenticationException:
         search.configure(state="normal")
         messagebox.showerror("Check Password", "Jump Server password error")
+    end_time = datetime.now()  # Start time to calculate time taken
+    completed_in = (end_time-start_time).total_seconds()
+    logs_entry(f"#### Total time taken is {completed_in} secs ####")
     FILEBROWSER_PATH = os.path.join(os.getenv('WINDIR'), 'explorer.exe')
     subprocess.run([FILEBROWSER_PATH, os.path.normpath(save_location1)])
 
@@ -117,9 +142,10 @@ def main_logic():
 def delay_with_refresh(n):
     i = 0
     while(i < n):
-        i += 0.1
-        time.sleep(.1)
-        root.update_idletasks()
+        i += 1
+        time.sleep(1)
+        logs_entry("# ", end="")
+    logs_entry("#")
 
 
 def logs_entry(log, end="\n"):

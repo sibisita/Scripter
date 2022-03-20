@@ -42,7 +42,7 @@ def netmiko_logic(devices, commands):
     logs_entry("**** Connection to Jump Server Successful ****\n\n")
     for device in devices:
         try:
-            if(device != "\n" and device[0] != " "):
+            if(device != "\n" and len(device) > 3):
                 logs_entry(
                     f"**** Establishing connection to {device} ****")
                 net_connect.write_channel(
@@ -87,11 +87,12 @@ def netmiko_logic(devices, commands):
                     logs_entry(net_connect.find_prompt())
                 with open(save_location1+f"/{device}_{datetime.now().strftime('%Y%m-%d%H-%M%S')}.log", "w+") as f1:
                     for cmd in commands:
-                        f1.write(f"******** Output : {cmd} ********\n\n")
-                        logs_entry(
-                            f"In {device}, Executing {cmd}")
-                        command_output = net_connect.send_command(cmd)
-                        f1.write(command_output+"\n\n****************\n\n")
+                        if(cmd != "\n" and len(cmd) > 2):
+                            f1.write(f"******** Output : {cmd} ********\n\n")
+                            logs_entry(
+                                f"In {device}, Executing {cmd}")
+                            command_output = net_connect.send_command(cmd)
+                            f1.write(command_output+"\n\n****************\n\n")
                 logs_entry(net_connect.find_prompt())
                 net_connect.write_channel("exit\n\n")
                 delay_with_refresh(2)
@@ -137,6 +138,7 @@ def main_logic():
     logs_entry(f"#### Total time taken is {completed_in} secs ####")
     FILEBROWSER_PATH = os.path.join(os.getenv('WINDIR'), 'explorer.exe')
     subprocess.run([FILEBROWSER_PATH, os.path.normpath(save_location1)])
+    search.configure(state="normal")
 
 
 def delay_with_refresh(n):
@@ -153,7 +155,7 @@ def logs_entry(log, end="\n"):
     statusbar.insert(END, log+end)
     statusbar.configure(state='disabled')
     statusbar.yview(END)
-    root.update_idletasks()
+    root.update()
 
 
 def new_window():
